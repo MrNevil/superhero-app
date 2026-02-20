@@ -1,4 +1,4 @@
-# Hero Atlas (Take-Home)
+# Hero Atlas
 
 A simple full-stack app to browse superheroes, save favorites, and generate team recommendations.
 
