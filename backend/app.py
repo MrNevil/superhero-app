@@ -27,25 +27,15 @@ def init_db():
             id INTEGER PRIMARY KEY,
             name TEXT,
             alignment TEXT,
-            publisher TEXT,
-            full_name TEXT,
-            gender TEXT,
-            race TEXT,
             image_url TEXT,
             intelligence INTEGER,
             strength INTEGER,
             speed INTEGER,
             durability INTEGER,
             power INTEGER,
-            combat INTEGER
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS favorites (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id TEXT,
-            hero_id INTEGER
+            combat INTEGER,
+            saved_by TEXT DEFAULT '',
+            is_favorite INTEGER DEFAULT 0
         )
     """)
 
@@ -64,10 +54,14 @@ def seed_heroes():
 
     token = os.getenv("SUPERHERO_API_TOKEN")
     if not token:
+        print(
+            "WARNING: No SUPERHERO_API_TOKEN found. Set the token in docker-compose.yml or as environment variable."
+        )
         conn.close()
         return
 
-    print("Seeding database...")
+    print("Seeding database with 100 heroes...")
+    success_count = 0
     for hero_id in range(1, 101):
         try:
             url = f"https://www.superheroapi.com/api/{token}/{hero_id}"
@@ -75,47 +69,45 @@ def seed_heroes():
             data = response.json()
 
             if data.get("response") != "success":
+                print(
+                    f"Hero {hero_id}: API returned error - {data.get('error', 'unknown')}"
+                )
                 continue
 
             ps = data.get("powerstats", {})
             bio = data.get("biography", {})
-            app_data = data.get("appearance", {})
             img = data.get("image", {})
+
+            # Simplified stat conversion
+            get_stat = lambda v: int(v) if v and v != "null" else 0
 
             cursor.execute(
                 """
-                INSERT INTO heroes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO heroes (id, name, alignment, image_url, intelligence, strength, speed, durability, power, combat, saved_by, is_favorite)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0)
             """,
                 (
                     int(data.get("id", hero_id)),
                     data.get("name", f"Hero {hero_id}"),
                     bio.get("alignment"),
-                    bio.get("publisher"),
-                    bio.get("full-name"),
-                    app_data.get("gender"),
-                    app_data.get("race"),
                     img.get("url"),
-                    int(ps.get("intelligence") or 0)
-                    if ps.get("intelligence") != "null"
-                    else None,
-                    int(ps.get("strength") or 0)
-                    if ps.get("strength") != "null"
-                    else None,
-                    int(ps.get("speed") or 0) if ps.get("speed") != "null" else None,
-                    int(ps.get("durability") or 0)
-                    if ps.get("durability") != "null"
-                    else None,
-                    int(ps.get("power") or 0) if ps.get("power") != "null" else None,
-                    int(ps.get("combat") or 0) if ps.get("combat") != "null" else None,
+                    get_stat(ps.get("intelligence")),
+                    get_stat(ps.get("strength")),
+                    get_stat(ps.get("speed")),
+                    get_stat(ps.get("durability")),
+                    get_stat(ps.get("power")),
+                    get_stat(ps.get("combat")),
                 ),
             )
+            success_count += 1
+            if success_count % 10 == 0:
+                print(f"Loaded {success_count} heroes...")
         except Exception as e:
             print(f"Failed hero {hero_id}: {e}")
-            continue
 
     conn.commit()
     conn.close()
-    print("Seeding complete!")
+    print(f"Seeding complete! Added {success_count} heroes.")
 
 
 @app.route("/health")
@@ -129,17 +121,21 @@ def get_heroes():
     cursor = conn.cursor()
 
     search = request.args.get("search", "")
-    limit = int(request.args.get("limit", 50))
+    limit = int(request.args.get("limit", 100))
     offset = int(request.args.get("offset", 0))
 
-    if search:
-        cursor.execute(
-            "SELECT * FROM heroes WHERE name LIKE ? LIMIT ? OFFSET ?",
-            (f"%{search}%", limit, offset),
-        )
-    else:
-        cursor.execute("SELECT * FROM heroes LIMIT ? OFFSET ?", (limit, offset))
+    # Simplified query logic
+    query = "SELECT * FROM heroes"
+    params = []
 
+    if search:
+        query += " WHERE name LIKE ?"
+        params.append(f"%{search}%")
+
+    query += " LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    cursor.execute(query, params)
     heroes = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return jsonify(heroes)
@@ -159,61 +155,49 @@ def get_hero(hero_id):
     return jsonify(dict(hero))
 
 
-@app.route("/favorites/<client_id>")
-def get_favorites(client_id):
+@app.route("/favorites")
+def get_favorites():
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT h.* FROM heroes h
-        JOIN favorites f ON h.id = f.hero_id
-        WHERE f.client_id = ?
-    """,
-        (client_id,),
-    )
+    cursor.execute("SELECT * FROM heroes WHERE is_favorite = 1")
     favorites = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return jsonify(favorites)
 
 
-@app.route("/favorites/<client_id>/<int:hero_id>", methods=["POST"])
-def add_favorite(client_id, hero_id):
+@app.route("/favorites/<int:hero_id>", methods=["POST"])
+def add_favorite(hero_id):
     conn = get_db()
     cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT * FROM favorites WHERE client_id = ? AND hero_id = ?",
-        (client_id, hero_id),
-    )
-    if cursor.fetchone():
-        conn.close()
-        return {"status": "exists"}
-
-    cursor.execute(
-        "INSERT INTO favorites (client_id, hero_id) VALUES (?, ?)", (client_id, hero_id)
-    )
+    cursor.execute("UPDATE heroes SET is_favorite = 1 WHERE id = ?", (hero_id,))
     conn.commit()
     conn.close()
     return {"status": "added"}
 
 
-@app.route("/favorites/<client_id>/<int:hero_id>", methods=["DELETE"])
-def remove_favorite(client_id, hero_id):
+@app.route("/favorites/<int:hero_id>", methods=["DELETE"])
+def remove_favorite(hero_id):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(
-        "DELETE FROM favorites WHERE client_id = ? AND hero_id = ?",
-        (client_id, hero_id),
-    )
+    cursor.execute("UPDATE heroes SET is_favorite = 0 WHERE id = ?", (hero_id,))
     conn.commit()
     conn.close()
     return {"status": "removed"}
 
 
+# Simplified team recommendation helpers
+def get_random_sample(heroes, count):
+    return random.sample(heroes, min(count, len(heroes)))
+
+
+def filter_by_alignment(heroes, alignment):
+    return [h for h in heroes if h.get("alignment") == alignment]
+
+
 @app.route("/teams/recommend")
 def recommend_team():
     strategy = request.args.get("strategy", "balanced")
-    power = request.args.get("power", "intelligence")
+    stat = request.args.get("stat", "intelligence")
     size = int(request.args.get("size", 5))
 
     conn = get_db()
@@ -225,8 +209,9 @@ def recommend_team():
     if not all_heroes:
         return {"error": "No heroes available"}, 404
 
+    # Random strategy
     if strategy == "random":
-        team = random.sample(all_heroes, min(size, len(all_heroes)))
+        team = get_random_sample(all_heroes, size)
         return {
             "strategy": "random",
             "team_size": len(team),
@@ -234,8 +219,9 @@ def recommend_team():
             "heroes": team,
         }
 
+    # Power-based strategy
     if strategy == "power":
-        valid_powers = [
+        valid_stats = [
             "intelligence",
             "strength",
             "speed",
@@ -243,40 +229,33 @@ def recommend_team():
             "power",
             "combat",
         ]
-        if power not in valid_powers:
-            return {"error": f"Power must be one of {valid_powers}"}, 400
+        if stat not in valid_stats:
+            return {"error": f"Stat must be one of {valid_stats}"}, 400
 
-        sorted_heroes = sorted(
-            all_heroes, key=lambda h: h.get(power) or 0, reverse=True
-        )
-        team = sorted_heroes[:size]
+        team = sorted(all_heroes, key=lambda h: h.get(stat, 0), reverse=True)[:size]
         return {
             "strategy": "power",
-            "power": power,
+            "stat": stat,
             "team_size": len(team),
-            "reason": f"Top {power} scores.",
+            "reason": f"Top {stat} scores.",
             "heroes": team,
         }
 
+    # Balanced strategy
     if strategy == "balanced":
-        good = [h for h in all_heroes if h.get("alignment") == "good"]
-        bad = [h for h in all_heroes if h.get("alignment") == "bad"]
-        neutral = [h for h in all_heroes if h.get("alignment") == "neutral"]
+        good = filter_by_alignment(all_heroes, "good")
+        bad = filter_by_alignment(all_heroes, "bad")
+        neutral = filter_by_alignment(all_heroes, "neutral")
 
         team = []
-        if good:
-            team.extend(random.sample(good, min(size // 2, len(good))))
-        if bad:
-            team.extend(random.sample(bad, min(size // 3, len(bad))))
-        if neutral:
-            team.extend(random.sample(neutral, min(1, len(neutral))))
+        team.extend(get_random_sample(good, size // 2))
+        team.extend(get_random_sample(bad, size // 3))
+        team.extend(get_random_sample(neutral, 1))
 
+        # Fill remaining slots
         if len(team) < size:
             remaining = [h for h in all_heroes if h not in team]
-            if remaining:
-                team.extend(
-                    random.sample(remaining, min(size - len(team), len(remaining)))
-                )
+            team.extend(get_random_sample(remaining, size - len(team)))
 
         return {
             "strategy": "balanced",

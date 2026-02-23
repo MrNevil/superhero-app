@@ -4,38 +4,35 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { apiDelete, apiGet, apiPost } from "../../../lib/api";
-import { getClientId } from "../../../lib/clientId";
 
 export default function HeroDetailPage() {
   const params = useParams();
   const heroId = params?.id;
   const [hero, setHero] = useState(null);
-  const [clientId, setClientId] = useState("");
   const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
-    const id = getClientId();
-    setClientId(id);
-
     if (!heroId) return;
 
     apiGet(`/heroes/${heroId}`)
       .then(setHero)
       .catch(() => setHero(null));
 
-    apiGet(`/favorites/${id}`)
-      .then((data) => setIsFavorite(data.some((item) => item.id === Number(heroId))))
+    apiGet("/favorites")
+      .then((data) =>
+        setIsFavorite(data.some((item) => item.id === Number(heroId))),
+      )
       .catch(() => setIsFavorite(false));
   }, [heroId]);
 
   const toggleFavorite = async () => {
-    if (!clientId || !hero) return;
+    if (!hero) return;
     if (isFavorite) {
-      await apiDelete(`/favorites/${clientId}/${hero.id}`);
+      await apiDelete(`/favorites/${hero.id}`);
       setIsFavorite(false);
       return;
     }
-    await apiPost(`/favorites/${clientId}/${hero.id}`);
+    await apiPost(`/favorites/${hero.id}`);
     setIsFavorite(true);
   };
 
@@ -68,7 +65,8 @@ export default function HeroDetailPage() {
             <div>
               <h1>{hero.name}</h1>
               <p className="muted">
-                {hero.full_name || "Unknown identity"} · {hero.publisher || "n/a"}
+                {hero.full_name || "Unknown identity"} ·{" "}
+                {hero.publisher || "n/a"}
               </p>
             </div>
             <button
@@ -99,7 +97,7 @@ export default function HeroDetailPage() {
               ["Speed", hero.speed],
               ["Durability", hero.durability],
               ["Power", hero.power],
-              ["Combat", hero.combat]
+              ["Combat", hero.combat],
             ].map(([label, value]) => (
               <div key={label} className="stat-row">
                 <span>{label}</span>

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import HeroCard from "../components/HeroCard";
 import { apiDelete, apiGet, apiPost } from "../lib/api";
-import { getClientId } from "../lib/clientId";
 
 const POWERS = [
   "intelligence",
@@ -12,13 +11,12 @@ const POWERS = [
   "speed",
   "durability",
   "power",
-  "combat"
+  "combat",
 ];
 
 export default function HomePage() {
   const [heroes, setHeroes] = useState([]);
   const [favorites, setFavorites] = useState([]);
-  const [clientId, setClientId] = useState("");
   const [search, setSearch] = useState("");
   const [team, setTeam] = useState(null);
   const [teamLoading, setTeamLoading] = useState(false);
@@ -26,21 +24,18 @@ export default function HomePage() {
   const [power, setPower] = useState("intelligence");
 
   useEffect(() => {
-    const id = getClientId();
-    setClientId(id);
-
     apiGet("/heroes?limit=200")
       .then(setHeroes)
       .catch(() => setHeroes([]));
 
-    apiGet(`/favorites/${id}`)
+    apiGet("/favorites")
       .then(setFavorites)
       .catch(() => setFavorites([]));
   }, []);
 
   const favoriteIds = useMemo(
     () => new Set(favorites.map((hero) => hero.id)),
-    [favorites]
+    [favorites],
   );
 
   const filteredHeroes = useMemo(() => {
@@ -52,15 +47,13 @@ export default function HomePage() {
   }, [heroes, search]);
 
   const toggleFavorite = async (hero) => {
-    if (!clientId) return;
-
     if (favoriteIds.has(hero.id)) {
-      await apiDelete(`/favorites/${clientId}/${hero.id}`);
+      await apiDelete(`/favorites/${hero.id}`);
       setFavorites((prev) => prev.filter((item) => item.id !== hero.id));
       return;
     }
 
-    await apiPost(`/favorites/${clientId}/${hero.id}`);
+    await apiPost(`/favorites/${hero.id}`);
     setFavorites((prev) => [...prev, hero]);
   };
 
@@ -70,7 +63,7 @@ export default function HomePage() {
 
     const params = new URLSearchParams({ strategy });
     if (strategy === "power") {
-      params.set("power", power);
+      params.set("stat", power);
     }
 
     try {
@@ -118,7 +111,9 @@ export default function HomePage() {
         <div className="panel-header">
           <div>
             <h2>Team recommendations</h2>
-            <p className="muted">Mix heroes, pick power leaders, or go random.</p>
+            <p className="muted">
+              Mix heroes, pick power leaders, or go random.
+            </p>
           </div>
           <div className="controls">
             <label>
