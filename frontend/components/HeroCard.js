@@ -1,6 +1,6 @@
-import Link from "next/link";
-
-export default function HeroCard({ hero, isFavorite, onToggleFavorite, linkHref }) {
+// Simple card component to display hero information
+// Props: hero (data), isFavorite (boolean), onToggleFavorite (function), onClick (function)
+export default function HeroCard({ hero, isFavorite, onToggleFavorite, onClick }) {
   const content = (
     <>
       <div className="card-image">
@@ -13,14 +13,17 @@ export default function HeroCard({ hero, isFavorite, onToggleFavorite, linkHref 
       <div className="card-body">
         <div>
           <h3>{hero.name}</h3>
-          <p className="muted">
-            {hero.publisher || "Unknown"} · {hero.alignment || "n/a"}
-          </p>
+          {(hero.publisher || hero.alignment) && (
+            <p className="muted">
+              {[hero.publisher, hero.alignment].filter(Boolean).join(" · ")}
+            </p>
+          )}
         </div>
         <button
           className={`heart ${isFavorite ? "active" : ""}`}
           onClick={(event) => {
             event.preventDefault();
+            event.stopPropagation();
             onToggleFavorite();
           }}
           aria-label={isFavorite ? "Remove favorite" : "Add favorite"}
@@ -31,11 +34,11 @@ export default function HeroCard({ hero, isFavorite, onToggleFavorite, linkHref 
     </>
   );
 
-  if (linkHref) {
+  if (onClick) {
     return (
-      <Link className="card" href={linkHref}>
+      <div className="card" onClick={onClick} style={{ cursor: "pointer" }}>
         {content}
-      </Link>
+      </div>
     );
   }
 

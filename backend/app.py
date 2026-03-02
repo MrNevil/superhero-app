@@ -11,12 +11,14 @@ CORS(app)
 DB_PATH = "data/heroes.db"
 
 
+# Database helper - connects and configures the database
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
+# Create database table if it doesn't exist
 def init_db():
     os.makedirs("data", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -26,7 +28,15 @@ def init_db():
         CREATE TABLE IF NOT EXISTS heroes (
             id INTEGER PRIMARY KEY,
             name TEXT,
+            full_name TEXT,
             alignment TEXT,
+            publisher TEXT,
+            gender TEXT,
+            race TEXT,
+            height TEXT,
+            weight TEXT,
+            occupation TEXT,
+            base TEXT,
             image_url TEXT,
             intelligence INTEGER,
             strength INTEGER,
@@ -43,6 +53,7 @@ def init_db():
     conn.close()
 
 
+# Fetch 100 heroes from superhero API and store in database
 def seed_heroes():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -77,19 +88,36 @@ def seed_heroes():
             ps = data.get("powerstats", {})
             bio = data.get("biography", {})
             img = data.get("image", {})
+            appearance = data.get("appearance", {})
+            work = data.get("work", {})
 
-            # Simplified stat conversion
-            get_stat = lambda v: int(v) if v and v != "null" else 0
+            # Helper function to convert stats to integers
+            def get_stat(value):
+                return int(value) if value and value != "null" else 0
+
+            # Helper function to clean text fields
+            def get_text(value):
+                if value and value != "null" and value != "-":
+                    return value
+                return None
 
             cursor.execute(
                 """
-                INSERT INTO heroes (id, name, alignment, image_url, intelligence, strength, speed, durability, power, combat, saved_by, is_favorite)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0)
+                INSERT INTO heroes (id, name, full_name, alignment, publisher, gender, race, height, weight, occupation, base, image_url, intelligence, strength, speed, durability, power, combat, saved_by, is_favorite)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0)
             """,
                 (
                     int(data.get("id", hero_id)),
                     data.get("name", f"Hero {hero_id}"),
-                    bio.get("alignment"),
+                    get_text(bio.get("full-name")),
+                    get_text(bio.get("alignment")),
+                    get_text(bio.get("publisher")),
+                    get_text(appearance.get("gender")),
+                    get_text(appearance.get("race")),
+                    get_text(", ".join(appearance.get("height", [])) if isinstance(appearance.get("height"), list) else appearance.get("height")),
+                    get_text(", ".join(appearance.get("weight", [])) if isinstance(appearance.get("weight"), list) else appearance.get("weight")),
+                    get_text(work.get("occupation")),
+                    get_text(work.get("base")),
                     img.get("url"),
                     get_stat(ps.get("intelligence")),
                     get_stat(ps.get("strength")),
@@ -115,6 +143,7 @@ def health():
     return {"status": "ok"}
 
 
+# API endpoint to get all heroes with optional search and pagination
 @app.route("/heroes")
 def get_heroes():
     conn = get_db()
@@ -141,6 +170,7 @@ def get_heroes():
     return jsonify(heroes)
 
 
+# API endpoint to get a single hero by ID
 @app.route("/heroes/<int:hero_id>")
 def get_hero(hero_id):
     conn = get_db()
@@ -155,6 +185,7 @@ def get_hero(hero_id):
     return jsonify(dict(hero))
 
 
+# API endpoint to get all favorite heroes
 @app.route("/favorites")
 def get_favorites():
     conn = get_db()
@@ -165,6 +196,7 @@ def get_favorites():
     return jsonify(favorites)
 
 
+# API endpoint to mark a hero as favorite
 @app.route("/favorites/<int:hero_id>", methods=["POST"])
 def add_favorite(hero_id):
     conn = get_db()
@@ -175,6 +207,7 @@ def add_favorite(hero_id):
     return {"status": "added"}
 
 
+# API endpoint to remove a hero from favorites
 @app.route("/favorites/<int:hero_id>", methods=["DELETE"])
 def remove_favorite(hero_id):
     conn = get_db()
@@ -186,14 +219,17 @@ def remove_favorite(hero_id):
 
 
 # Simplified team recommendation helpers
+# Helper function to pick random heroes
 def get_random_sample(heroes, count):
     return random.sample(heroes, min(count, len(heroes)))
 
 
+# Helper function to filter heroes by alignment (good/bad/neutral)
 def filter_by_alignment(heroes, alignment):
     return [h for h in heroes if h.get("alignment") == alignment]
 
 
+# API endpoint to recommend a team based on strategy
 @app.route("/teams/recommend")
 def recommend_team():
     strategy = request.args.get("strategy", "balanced")
@@ -265,7 +301,7 @@ def recommend_team():
         }
 
     return {"error": "Unknown strategy"}, 400
-
+ 
 
 if __name__ == "__main__":
     init_db()

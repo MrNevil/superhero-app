@@ -222,14 +222,6 @@ input {
   font-weight: 600;
 }
 
-.detail-page {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 2.5rem 1.5rem 4rem;
-  display: grid;
-  gap: 1.6rem;
-}
-
 .detail-card {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(260px, 1.4fr);
@@ -246,8 +238,10 @@ input {
 }
 
 .detail-info {
-  display: grid;
-  gap: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-right: 3rem;
 }
 
 .detail-header {
@@ -259,14 +253,23 @@ input {
 
 .detail-meta {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 1rem;
 }
 
-.detail-meta .label {
+.detail-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-meta .label,
+.label {
   display: block;
   font-size: 0.75rem;
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .stats {
@@ -287,3 +290,76 @@ input {
     grid-template-columns: 1fr;
   }
 }
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.modal-content {
+  position: relative;
+  max-width: 1000px;
+  width: 100%;
+  margin: auto;
+  animation: modalSlideIn 0.25s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text);
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+@media (max-width: 900px) {
+  .modal-overlay {
+    padding: 0;
+  }
+  
+  .modal-content {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+  }
+}
+
