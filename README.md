@@ -87,10 +87,9 @@ superhero-app/
 | ------ | -------------------------------- | ----------------------- |
 | GET    | `/heroes`                        | Get all heroes          |
 | GET    | `/heroes/{id}`                   | Get single hero         |
-| GET    | `/favorites/{clientId}`          | Get user's saved heroes |
-| POST   | `/favorites/{clientId}/{heroId}` | Save a hero             |
-| DELETE | `/favorites/{clientId}/{heroId}` | Remove a hero           |
-| PUT    | `/heroes/{id}`                   | Update hero alignment   |
+| GET    | `/favorites`                     | Get favorite heroes     |
+| POST   | `/favorites/{heroId}`            | Mark hero as favorite   |
+| DELETE | `/favorites/{heroId}`            | Remove favorite         |
 | GET    | `/teams/recommend?strategy=X`    | Generate team           |
 
 ## Database
@@ -101,33 +100,31 @@ Single `heroes` table with columns:
 - `alignment` - Good/Bad/Neutral
 - `image_url` - Hero image link
 - `intelligence`, `strength`, `speed`, `durability`, `power`, `combat` - Power stats (0-100)
-- `saved_by` - Comma-separated client IDs of users who favorited this hero
+- `is_favorite` - Favorite flag (0 or 1)
 
 ## How It Works
 
 ### Frontend Flow
 1. User loads home page
-2. Browser generates unique ID (stored in localStorage)
-3. Page fetches all 100 heroes and user's favorites
+2. Page fetches all heroes and favorites from backend
 4. User can search, add/remove favorites, or generate a team
-5. Clicking a hero card navigates to detail page
+5. Clicking a hero card opens the hero detail modal
 
 ### Backend Flow
 1. Flask server starts and connects to SQLite database
 2. On startup, fetches 100 heroes from Superhero API
 3. Stores heroes in database with power stats
 4. Handles API requests from frontend
-5. Favorites stored as comma-separated client IDs in `saved_by` column
+5. Favorites stored using `is_favorite` flag
 
 ### Favorites System
 - When user clicks heart: frontend sends POST/DELETE request to backend
-- Backend appends/removes client ID from hero's `saved_by` field
-- No login needed - identification by browser-generated UUID
+- Backend updates hero `is_favorite` flag in SQLite
 
 ### Team Generation
 - **Random**: Shuffle all heroes, pick first 5
-- **Power-based**: Sort by total power score, pick top 5
-- **Balanced**: Pick 2 strong + 3 random heroes
+- **Power-based**: Sort by selected stat (`intelligence`, `strength`, `speed`, `durability`, `power`, `combat`)
+- **Balanced**: Mix of good, bad, and neutral heroes
 
 ## Common Issues
 
