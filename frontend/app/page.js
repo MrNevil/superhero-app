@@ -1,92 +1,104 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import HeroCard from "../components/HeroCard";
+import HeroModal from "../components/HeroModal";
 import { apiDelete, apiGet, apiPost } from "../lib/api";
 
-const POWERS = [
-  "intelligence",
-  "strength",
-  "speed",
-  "durability",
-  "power",
-  "combat",
-];
-
 export default function HomePage() {
+  // State for heroes data
   const [heroes, setHeroes] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [search, setSearch] = useState("");
+  const [selectedHeroId, setSelectedHeroId] = useState(null);
+  
+  // State for team recommendations
   const [team, setTeam] = useState(null);
   const [teamLoading, setTeamLoading] = useState(false);
   const [strategy, setStrategy] = useState("balanced");
   const [power, setPower] = useState("intelligence");
 
+  // Load heroes and favorites on page load
   useEffect(() => {
-    apiGet("/heroes?limit=200")
-      .then(setHeroes)
-      .catch(() => setHeroes([]));
+    const loadData = async () => {
+      try {
+        const heroesData = await apiGet("/heroes?limit=200");
+        setHeroes(heroesData);
+      } catch (error) {
+        console.error("Failed to load heroes", error);
+      }
 
-    apiGet("/favorites")
-      .then(setFavorites)
-      .catch(() => setFavorites([]));
+      try {
+        const favoritesData = await apiGet("/favorites");
+        setFavorites(favoritesData);
+      } catch (error) {
+        console.error("Failed to load favorites", error);
+      }
+    };
+
+    loadData();
   }, []);
 
-  const favoriteIds = useMemo(
-    () => new Set(favorites.map((hero) => hero.id)),
-    [favorites],
-  );
-
-  const filteredHeroes = useMemo(() => {
-    if (!search.trim()) {
-      return heroes;
-    }
-    const query = search.toLowerCase();
-    return heroes.filter((hero) => hero.name.toLowerCase().includes(query));
-  }, [heroes, search]);
-
-  const toggleFavorite = async (hero) => {
-    if (favoriteIds.has(hero.id)) {
-      await apiDelete(`/favorites/${hero.id}`);
-      setFavorites((prev) => prev.filter((item) => item.id !== hero.id));
-      return;
-    }
-
-    await apiPost(`/favorites/${hero.id}`);
-    setFavorites((prev) => [...prev, hero]);
+  // Check if a hero is in favorites
+  const isFavorite = (heroId) => {
+    return favorites.some((fav) => fav.id === heroId);
   };
 
-  const requestTeam = async () => {
-    setTeamLoading(true);
-    setTeam(null);
+  // Filter heroes based on search
+  const displayedHeroes = heroes.filter((hero) => {
+    if (!search.trim()) return true;
+    return hero.name.toLowerCase().includes(search.toLowerCase());
+  });
 
-    const params = new URLSearchParams({ strategy });
-    if (strategy === "power") {
-      params.set("stat", power);
-    }
-
+  // Add or remove a hero from favorites
+  const toggleFavorite = async (hero) => {
     try {
+      if (isFavorite(hero.id)) {
+        // Remove from favorites
+        await apiDelete(`/favorites/${hero.id}`);
+        setFavorites(favorites.filter((fav) => fav.id !== hero.id));
+      } else {
+        // Add to favorites
+        await apiPost(`/favorites/${hero.id}`);
+        setFavorites([...favorites, hero]);
+      }
+    } catch (error) {
+      console.error("Failed to toggle favorite", error);
+    }
+  };
+
+  // Request a team recommendation
+  const requestTeam = async () => {
+    try {
+      setTeamLoading(true);
+      setTeam(null);
+      const params = new URLSearchParams({ strategy });
+      if (strategy === "power") {
+        params.set("stat", power);
+      }
       const data = await apiGet(`/teams/recommend?${params.toString()}`);
       setTeam(data);
+    } catch (error) {
+      console.error("Failed to get team", error);
     } finally {
       setTeamLoading(false);
     }
   };
 
   return (
-    <div className="page" id="top">
+    <div className="page">
+      {/* Header */}
       <header className="hero">
         <div>
           <p className="eyebrow">Hero Atlas</p>
           <h1>Build your dream squad.</h1>
           <p className="lead">
-            Browse iconic characters, save favorites, and generate team
-            recommendations in seconds.
+            Explore {heroes.length} iconic heroes, save your favorites, and view
+            detailed stats.
           </p>
         </div>
         <div className="hero-card">
-          <p className="label">Quick Stats</p>
+          <p className="label">Your Collection</p>
           <div className="stat-grid">
             <div>
               <span className="stat">{heroes.length}</span>
@@ -107,20 +119,19 @@ export default function HomePage() {
         </div>
       </header>
 
+      {/* Team Recommendations Section */}
       <section className="panel">
         <div className="panel-header">
           <div>
             <h2>Team recommendations</h2>
-            <p className="muted">
-              Mix heroes, pick power leaders, or go random.
-            </p>
+            <p className="muted">Pick a strategy and generate your perfect team.</p>
           </div>
           <div className="controls">
             <label>
               Strategy
               <select
                 value={strategy}
-                onChange={(event) => setStrategy(event.target.value)}
+                onChange={(e) => setStrategy(e.target.value)}
               >
                 <option value="balanced">Balanced</option>
                 <option value="power">Power focus</option>
@@ -130,15 +141,13 @@ export default function HomePage() {
             {strategy === "power" && (
               <label>
                 Power
-                <select
-                  value={power}
-                  onChange={(event) => setPower(event.target.value)}
-                >
-                  {POWERS.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
+                <select value={power} onChange={(e) => setPower(e.target.value)}>
+                  <option value="intelligence">intelligence</option>
+                  <option value="strength">strength</option>
+                  <option value="speed">speed</option>
+                  <option value="durability">durability</option>
+                  <option value="power">power</option>
+                  <option value="combat">combat</option>
                 </select>
               </label>
             )}
@@ -153,8 +162,9 @@ export default function HomePage() {
               <HeroCard
                 key={hero.id}
                 hero={hero}
-                isFavorite={favoriteIds.has(hero.id)}
+                isFavorite={isFavorite(hero.id)}
                 onToggleFavorite={() => toggleFavorite(hero)}
+                onClick={() => setSelectedHeroId(hero.id)}
               />
             ))
           ) : (
@@ -164,43 +174,44 @@ export default function HomePage() {
         {team?.reason && <p className="reason">{team.reason}</p>}
       </section>
 
+      {/* Search and All Heroes Section */}
       <section className="panel">
         <div className="panel-header">
           <div>
             <h2>All heroes</h2>
-            <p className="muted">Tap a card to see full details.</p>
+            <p className="muted">Click a card to view full details.</p>
           </div>
           <label className="search">
             Search
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Try Batman"
             />
           </label>
         </div>
         <div className="grid">
-          {filteredHeroes.map((hero) => (
-            <HeroCard
-              key={hero.id}
-              hero={hero}
-              isFavorite={favoriteIds.has(hero.id)}
-              onToggleFavorite={() => toggleFavorite(hero)}
-              linkHref={`/hero/${hero.id}`}
-            />
-          ))}
+          {displayedHeroes.length ? (
+            displayedHeroes.map((hero) => (
+              <HeroCard
+                key={hero.id}
+                hero={hero}
+                isFavorite={isFavorite(hero.id)}
+                onToggleFavorite={() => toggleFavorite(hero)}
+                onClick={() => setSelectedHeroId(hero.id)}
+              />
+            ))
+          ) : (
+            <p className="muted">No heroes found. Try a different search.</p>
+          )}
         </div>
       </section>
 
+      {/* Favorites Section */}
       <section className="panel">
         <div className="panel-header">
-          <div>
-            <h2>Favorites</h2>
-            <p className="muted">Your personal hall of fame.</p>
-          </div>
-          <Link className="text-link" href="#top">
-            Back to top
-          </Link>
+          <h2>Favorites</h2>
+          <p className="muted">Your personal collection of heroes.</p>
         </div>
         <div className="grid">
           {favorites.length ? (
@@ -210,14 +221,25 @@ export default function HomePage() {
                 hero={hero}
                 isFavorite
                 onToggleFavorite={() => toggleFavorite(hero)}
-                linkHref={`/hero/${hero.id}`}
+                onClick={() => setSelectedHeroId(hero.id)}
               />
             ))
           ) : (
-            <p className="muted">No favorites yet. Tap a heart to save one.</p>
+            <p className="muted">No favorites yet. Click the heart icon to save heroes.</p>
           )}
         </div>
       </section>
+
+      {/* Hero Details Modal */}
+      <HeroModal
+        heroId={selectedHeroId}
+        onClose={() => setSelectedHeroId(null)}
+        isFavorite={selectedHeroId ? isFavorite(selectedHeroId) : false}
+        onToggleFavorite={selectedHeroId ? () => {
+          const hero = heroes.find(h => h.id === selectedHeroId);
+          if (hero) toggleFavorite(hero);
+        } : null}
+      />
     </div>
   );
 }
